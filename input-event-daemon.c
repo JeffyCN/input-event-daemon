@@ -823,7 +823,7 @@ static void daemon_print_help() {
             "    "PROGRAM" "
             "[ [ --monitor | --list | --help | --version ] |\n"
             "                         "
-            "[--config=FILE] [--verbose] [--no-daemon] ]\n"
+            "[--config=FILE] [--verbose] [--no-daemon] ] [devices]\n"
             "\n"
             "Available Options:\n"
             "\n"
@@ -846,7 +846,7 @@ static void daemon_print_version() {
 }
 
 int main(int argc, char *argv[]) {
-    int result, arguments = 0;
+    int result, arguments = 0, listen_len = 0;
     static const struct option long_options[] = {
         { "monitor",   no_argument,       0, 'm' },
         { "list",      no_argument,       0, 'l' },
@@ -866,6 +866,9 @@ int main(int argc, char *argv[]) {
 
     while (optind < argc) {
         result = getopt_long(argc, argv, "mlc:vDhV", long_options, NULL);
+        if (result == -1)
+            break;
+
         arguments++;
 
         switch(result) {
@@ -907,8 +910,18 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    for (arguments = optind; arguments < argc; arguments++) {
+        if(listen_len >= MAX_LISTENER) {
+            fprintf(stderr, PROGRAM": Listener limit exceeded!\n");
+            break;
+        }
+
+        conf.listen[listen_len++] = strdup(argv[arguments]);
+    }
+
     if(conf.monitor) {
-        input_open_all_listener();
+        if (!conf.listen[0])
+            input_open_all_listener();
     } else {
         config_parse_file();
     }
