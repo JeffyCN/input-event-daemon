@@ -693,13 +693,18 @@ void daemon_start_listener() {
     signal(SIGCHLD, SIG_IGN);
 
     FD_ZERO(&initial_fdset);
+    fd_len = 0;
     for(i=0; i < MAX_LISTENER && conf.listen[i] != NULL; i++) {
         conf.listen_fd[i] = open(conf.listen[i], O_RDONLY);
 
         if(conf.listen_fd[i] < 0) {
             fprintf(stderr, PROGRAM": open(%s): %s\n",
                 conf.listen[i], strerror(errno));
-            exit(EXIT_FAILURE);
+                conf.listen_fd[i] = 0;
+                continue;
+        }
+        if(conf.verbose) {
+            fprintf(stderr, PROGRAM": Adding device: %s...\n", conf.listen[i]);
         }
         FD_SET(conf.listen_fd[i], &initial_fdset);
         ioctl(conf.listen_fd[i], EVIOCGSW(sizeof(sw_states)), &sw_states);
@@ -710,9 +715,8 @@ void daemon_start_listener() {
             event.value = (sw_states[n/8] >> n%8) & 0x1;
             input_parse_event(&event, conf.listen[i]);
         }
+        fd_len++;
     }
-
-    fd_len = i;
 
     if(fd_len == 0) {
         fprintf(stderr, PROGRAM": no listener found!\n");
@@ -775,12 +779,17 @@ void daemon_start_listener() {
             idle_time = 0;
         }
 
-        for(i=0; i<fd_len; i++) {
+        for(i=0; i<MAX_LISTENER; i++) {
             if(FD_ISSET(conf.listen_fd[i], &fdset)) {
                 if(read(conf.listen_fd[i], &event, sizeof(event)) < 0) {
                     fprintf(stderr, PROGRAM": read(%s): %s\n",
                         conf.listen[i], strerror(errno));
-                    break;
+
+                    /* read error? Remove the device! */
+                    FD_CLR(conf.listen_fd[i], &initial_fdset);
+                    close(conf.listen_fd[i]);
+                    conf.listen_fd[i] = 0;
+                    continue;
                 }
                 input_parse_event(&event, conf.listen[i]);
             }
