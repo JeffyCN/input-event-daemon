@@ -37,7 +37,7 @@ static int key_event_compare(const key_event_t *a, const key_event_t *b) {
             }
         }
     }
-    return 0;
+    return a->value - b->value;
 }
 
 static const char *key_event_name(unsigned int code) {
@@ -77,6 +77,8 @@ static key_event_t
         .code = NULL,
         .modifier_n = 0
     };
+
+    current_key_event.value = pressed;
 
     if(pressed) {
 
@@ -149,7 +151,9 @@ static key_event_t
                 sizeof(const char*),
                 (int (*)(const void *, const void *)) strcmp
             );
+        }
 
+        if (current_key_event.code != NULL) {
             fired_key_event = bsearch(
                 &current_key_event,
                 key_events,
@@ -157,15 +161,9 @@ static key_event_t
                 sizeof(key_event_t),
                 (int (*)(const void *, const void *)) key_event_compare
             );
-
         }
 
-        if(
-            current_key_event.code != NULL &&
-            strcmp(current_key_event.code, key_event_name(code)) == 0
-        ) {
-            current_key_event.code = NULL;
-        }
+        current_key_event.code = NULL;
 
         /* remove released key from modifiers */
         modifier_code = key_event_modifier_name(key_event_name(code));
@@ -534,7 +532,7 @@ void config_parse_dir(const char *path) {
 
 static const char *config_key_event(char *shortcut, char *exec) {
     int i;
-    char *code, *modifier;
+    char *code, *value, *modifier;
     key_event_t *new_key_event;
 
     if(key_event_n >= MAX_EVENTS) {
@@ -547,6 +545,10 @@ static const char *config_key_event(char *shortcut, char *exec) {
     for(i=0; i < MAX_MODIFIERS; i++) {
         new_key_event->modifiers[i] = NULL;
     }
+
+    value = shortcut;
+    strsep(&value, ":");
+    shortcut = config_trim_string(shortcut);
 
     if((code = strrchr(shortcut, '+')) != NULL) {
         *code = '\0';
@@ -570,6 +572,16 @@ static const char *config_key_event(char *shortcut, char *exec) {
 
     qsort(new_key_event->modifiers, new_key_event->modifier_n,
         sizeof(const char*), (int (*)(const void *, const void *)) strcmp);
+
+    new_key_event->value = 1;
+    if(value != NULL) {
+        value = config_trim_string(value);
+        new_key_event->value = atoi(value);
+    }
+
+    /* only trigger modifiers on release */
+    if (new_key_event->modifier_n)
+        new_key_event->value = 0;
 
     return NULL;
 }

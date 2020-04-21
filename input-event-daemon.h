@@ -39,6 +39,7 @@ struct {
 
 typedef struct key_event {
     const char *code;
+    int value;
     const char *modifiers[MAX_MODIFIERS];
     size_t     modifier_n;
     const char *exec;
